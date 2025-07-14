@@ -29,15 +29,6 @@ Technical Highlights
 - MySQL database with optimized queries
 - Responsive React dashboard
 - Comprehensive error handling
-
-System Architecture
-
-```mermaid
-graph TD
-    A[React Frontend] -->|Axios| B[Spring Boot API]
-    B -->|JPA| C[MySQL Database]
-    B --> D[JWT Authentication]
-    A --> E[Context API State Management]
 ```
 
 ## Installation
