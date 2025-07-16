@@ -1,0 +1,1 @@
+{"Modules":[{"Key":"","Source":"","Dir":"."},{"Key":"backend","Source":"./k8s/backend","Dir":""},{"Key":"frontend","Source":"./k8s/frontend","Dir":""},{"Key":"ingress","Source":"./k8s/ingress","Dir":""},{"Key":"mysql","Source":"./k8s/mysql","Dir":""}]}
