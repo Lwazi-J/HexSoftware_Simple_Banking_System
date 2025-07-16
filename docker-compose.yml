@@ -1,0 +1,28 @@
+version: '3.8'  # Can be removed in newer versions
+services:
+  backend:
+    image: lwazi962/banking-backend:latest
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/bankingsystem
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=yoursecurepassword
+    depends_on:
+      - db
+
+  frontend:
+    image: lwazi962/banking-frontend:latest
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  db:
+    image: mysql:8.0  # Or lwazi962/banking-mysql:latest if customized
+    environment:
+      - MYSQL_ROOT_PASSWORD=yoursecurepassword
+      - MYSQL_DATABASE=bankingsystem
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:
