@@ -3,7 +3,7 @@ FROM maven:3.8.6-openjdk-18 AS build
 WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline
-COPY backend/src ./src
+COPY src ./src
 RUN mvn package -DskipTests
 
 # Run stage

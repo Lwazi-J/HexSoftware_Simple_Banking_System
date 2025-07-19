@@ -24,7 +24,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Run Unit Tests
-        working-directory: ./backend/src/test/java/com/example/demo
+        working-directory: ./src/test
         run: |
           ./mvnw clean test
           ./mvnw jacoco:report
