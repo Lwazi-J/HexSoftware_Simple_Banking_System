@@ -1,5 +1,7 @@
-package com.example.demo.model;
+package com.example.demo;
 
+import com.example.demo.model.BankAccount;
+import com.example.demo.model.Customer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;

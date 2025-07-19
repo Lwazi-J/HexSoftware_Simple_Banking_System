@@ -1,9 +1,10 @@
-package com.example.demo.service;
+package com.example.demo;
 
 import com.example.demo.model.BankAccount;
 import com.example.demo.model.Customer;
 import com.example.demo.repository.BankAccountRepository;
 import com.example.demo.repository.CustomerRepository;
+import com.example.demo.service.BankService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
