@@ -38,9 +38,9 @@ jobs:
         with:
           name: backend-test-results
           path: |
-            ./backend/target/surefire-reports/
-            ./backend/target/jacoco-report/
-          retention-days: 7
+            ./target/surefire-reports/
+            ./target/jacoco-report/
+          retention-days: 3
 
   build-images:
     needs: backend-unit-tests
