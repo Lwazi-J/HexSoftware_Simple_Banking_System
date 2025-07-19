@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline (Immediate)
 
 on:
   push:
@@ -14,7 +14,6 @@ env:
   NODE_PORT: 30080
 
 jobs:
-  # JOB 1: BACKEND UNIT TESTS
   backend-unit-tests:
     runs-on: ubuntu-latest
     steps:
@@ -35,7 +34,7 @@ jobs:
         env:
           SPRING_DATASOURCE_URL: jdbc:h2:mem:testdb
           SPRING_DATASOURCE_USERNAME: sa
-          SPRING_DATASOURCE_PASSWORD:
+          SPRING_DATASOURCE_PASSWORD: ""
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
@@ -44,8 +43,8 @@ jobs:
           path: |
             ./backend/target/surefire-reports/
             ./backend/target/jacoco-report/
+          retention-days: 7
 
-  # JOB 2: BUILD DOCKER IMAGES
   build-images:
     needs: backend-unit-tests
     runs-on: ubuntu-latest
@@ -65,21 +64,20 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
 
-      - name: Build Backend Image
+      - name: Build and Push Backend
         run: |
-          docker build -t $DOCKERHUB_USERNAME/banking-backend:$GITHUB_SHA \
+          docker buildx build --push \
+            -t $DOCKERHUB_USERNAME/banking-backend:$GITHUB_SHA \
             --build-arg ENVIRONMENT=${{ github.event_name == 'pull_request' && 'dev' || 'prod' }} \
             -f backend/Dockerfile .
-          docker push $DOCKERHUB_USERNAME/banking-backend:$GITHUB_SHA
 
-      - name: Build Frontend Image
+      - name: Build and Push Frontend
         run: |
-          docker build -t $DOCKERHUB_USERNAME/banking-frontend:$GITHUB_SHA \
+          docker buildx build --push \
+            -t $DOCKERHUB_USERNAME/banking-frontend:$GITHUB_SHA \
             --build-arg VITE_API_BASE_URL=/api \
             -f frontend/Dockerfile .
-          docker push $DOCKERHUB_USERNAME/banking-frontend:$GITHUB_SHA
 
-  # JOB 3: TERRAFORM DEPLOYMENT
   terraform-deploy:
     needs: build-images
     runs-on: ubuntu-latest
@@ -92,11 +90,18 @@ jobs:
 
       - name: Set up Minikube
         run: |
-          curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
-          sudo install minikube-linux-amd64 /usr/local/bin/minikube
+          curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+          chmod +x minikube
+          sudo mv minikube /usr/local/bin/
           minikube start --driver=docker --memory=4096 --cpus=2
           minikube addons enable ingress
           minikube addons enable metrics-server
+
+      - name: Set up kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/v$KUBE_VERSION/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -116,31 +121,23 @@ jobs:
           export TF_VAR_mysql_root_password=$MYSQL_ROOT_PASSWORD
           terraform apply -auto-approve
 
-  # JOB 4: DEPLOYMENT VERIFICATION
   verify-deployment:
     needs: terraform-deploy
     runs-on: ubuntu-latest
     steps:
       - name: Check Pod Status
         run: |
-          kubectl get pods -n $NAMESPACE -w &
-          kubectl wait --for=condition=ready \
-            --timeout=300s \
-            -n $NAMESPACE \
-            pod -l app=backend
-          kubectl wait --for=condition=ready \
-            --timeout=300s \
-            -n $NAMESPACE \
-            pod -l app=frontend
+          kubectl get pods -n $NAMESPACE
+          timeout 300 bash -c "while ! kubectl get pods -n $NAMESPACE -l app=backend -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q True; do sleep 5; done"
+          timeout 300 bash -c "while ! kubectl get pods -n $NAMESPACE -l app=frontend -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q True; do sleep 5; done"
 
       - name: Run Smoke Tests
         run: |
           kubectl exec -n $NAMESPACE $(kubectl get pods -n $NAMESPACE -l app=backend -o jsonpath='{.items[0].metadata.name}') -- \
-            curl -sS http://localhost:8080/actuator/health
+            curl -sSf http://localhost:8080/actuator/health
           kubectl exec -n $NAMESPACE $(kubectl get pods -n $NAMESPACE -l app=frontend -o jsonpath='{.items[0].metadata.name}') -- \
-            curl -sS http://localhost:80
+            curl -sSf http://localhost:80
 
-  # JOB 5: ACCESS INSTRUCTIONS
   access-instructions:
     needs: verify-deployment
     runs-on: ubuntu-latest
@@ -148,8 +145,9 @@ jobs:
       - name: Generate Access Info
         run: |
           MINIKUBE_IP=$(minikube ip)
-          echo "### Access Methods" >> $GITHUB_STEP_SUMMARY
-          echo "1. **Minikube Tunnel**" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "#### Access Methods:" >> $GITHUB_STEP_SUMMARY
+          echo "1. **Minikube Tunnel** (Recommended)" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo 'minikube tunnel' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -159,12 +157,14 @@ jobs:
           
           echo "2. **Port Forwarding**" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "kubectl port-forward -n $NAMESPACE svc/frontend 8080:80" >> $GITHUB_STEP_SUMMARY
-          echo "kubectl port-forward -n $NAMESPACE svc/backend 8081:8080" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl port-forward -n $NAMESPACE svc/frontend 8080:80 &" >> $GITHUB_STEP_SUMMARY
+          echo "kubectl port-forward -n $NAMESPACE svc/backend 8081:8080 &" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "- Frontend: http://localhost:8080" >> $GITHUB_STEP_SUMMARY
           echo "- Backend: http://localhost:8081/api" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          echo "3. **Direct Access**" >> $GITHUB_STEP_SUMMARY
+          echo "3. **Direct NodePort Access**" >> $GITHUB_STEP_SUMMARY
           echo "- Frontend: http://$MINIKUBE_IP:$NODE_PORT" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> **Note**: Minikube tunnel requires running in a separate terminal" >> $GITHUB_STEP_SUMMARY
